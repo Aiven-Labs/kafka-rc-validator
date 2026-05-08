@@ -1,0 +1,16 @@
+# Maven build output
+kafka-maven-validator/target/
+kafka-maven-validator/dependency-reduced-pom.xml
+.m2
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+.metals/
+
+# Claude/AI assistant
+.claude/
+
+# OS files
+.DS_Store
