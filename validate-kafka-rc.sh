@@ -130,7 +130,7 @@ start_kafka_standalone() {
 
     "$kafka_dir/bin/kafka-server-start.sh" "$kraft_config" > "$log_file" 2>&1 &
     KAFKA_STANDALONE_PID=$!
-    MANAGED_PIDS+=($KAFKA_STANDALONE_PID)
+    MANAGED_PIDS+=("$KAFKA_STANDALONE_PID")
 }
 
 # --- End helper functions ---
@@ -325,8 +325,10 @@ verify_checksums() {
 
         if [[ -f "${artifact}.sha512" ]]; then
             log_info "Verifying SHA512 for $artifact..."
-            local expected_sha512=$(parse_checksum_file "${artifact}.sha512" "$artifact")
-            local actual_sha512=$(sha512sum "$artifact" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+            local expected_sha512
+            expected_sha512=$(parse_checksum_file "${artifact}.sha512" "$artifact")
+            local actual_sha512
+            actual_sha512=$(sha512sum "$artifact" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
 
             if [[ "$expected_sha512" == "$actual_sha512" ]]; then
                 log_success "SHA512 valid for $artifact"
@@ -344,8 +346,10 @@ verify_checksums() {
 
         if [[ -f "${artifact}.sha1" ]]; then
             log_info "Verifying SHA1 for $artifact..."
-            local expected_sha1=$(parse_checksum_file "${artifact}.sha1" "$artifact")
-            local actual_sha1=$(sha1sum "$artifact" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+            local expected_sha1
+            expected_sha1=$(parse_checksum_file "${artifact}.sha1" "$artifact")
+            local actual_sha1
+            actual_sha1=$(sha1sum "$artifact" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
 
             if [[ "$expected_sha1" == "$actual_sha1" ]]; then
                 log_success "SHA1 valid for $artifact"
@@ -361,8 +365,10 @@ verify_checksums() {
 
         if [[ -f "${artifact}.md5" ]]; then
             log_info "Verifying MD5 for $artifact..."
-            local expected_md5=$(parse_checksum_file "${artifact}.md5" "$artifact")
-            local actual_md5=$(md5sum "$artifact" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+            local expected_md5
+            expected_md5=$(parse_checksum_file "${artifact}.md5" "$artifact")
+            local actual_md5
+            actual_md5=$(md5sum "$artifact" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
 
             if [[ "$expected_md5" == "$actual_md5" ]]; then
                 log_success "MD5 valid for $artifact"
@@ -395,7 +401,8 @@ check_urls() {
         local name="${entry#*|}"
 
         log_info "Checking $name: $url"
-        local http_code=$(curl -sS -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000")
+        local http_code
+        http_code=$(curl -sS -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000")
 
         if [[ "$http_code" == "200" ]]; then
             log_success "$name is accessible (HTTP $http_code)"
@@ -490,7 +497,8 @@ test_binary_distribution() {
     fi
 
     if [[ -d "${bin_dir}/libs" ]] && ls "${bin_dir}"/libs/*.jar &>/dev/null; then
-        local jar_count=$(ls "${bin_dir}"/libs/*.jar | wc -l)
+        local jar_count
+        jar_count=$(ls "${bin_dir}"/libs/*.jar | wc -l)
         log_success "Found $jar_count JAR files in libs/"
         record_result "PASS" "Library JARs present"
     else
@@ -593,7 +601,8 @@ run_quickstart_test() {
     record_result "PASS" "Quickstart: produce messages"
 
     log_info "Consuming test messages..."
-    local consumed=$(timeout 10 "$kafka_dir/bin/kafka-console-consumer.sh" --topic quickstart-test --from-beginning --max-messages 3 --bootstrap-server localhost:9092 2>/dev/null || true)
+    local consumed
+    consumed=$(timeout 10 "$kafka_dir/bin/kafka-console-consumer.sh" --topic quickstart-test --from-beginning --max-messages 3 --bootstrap-server localhost:9092 2>/dev/null || true)
     if [[ $(echo "$consumed" | wc -l) -ge 3 ]]; then
         log_success "Messages consumed successfully"
         record_result "PASS" "Quickstart: consume messages"
@@ -633,9 +642,12 @@ run_complex_tests() {
     mkdir -p "$log_dir_base"
 
     # Generate directory IDs for each node
-    local dir_id_1=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | xxd -r -p | base64 | tr '+/' '-_' | tr -d '=')
-    local dir_id_2=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | xxd -r -p | base64 | tr '+/' '-_' | tr -d '=')
-    local dir_id_3=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | xxd -r -p | base64 | tr '+/' '-_' | tr -d '=')
+    local dir_id_1
+    dir_id_1=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | xxd -r -p | base64 | tr '+/' '-_' | tr -d '=')
+    local dir_id_2
+    dir_id_2=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | xxd -r -p | base64 | tr '+/' '-_' | tr -d '=')
+    local dir_id_3
+    dir_id_3=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | xxd -r -p | base64 | tr '+/' '-_' | tr -d '=')
 
     # Ports: Node 1: 9092/19092, Node 2: 9093/19093, Node 3: 9094/19094
     local initial_controllers="1@localhost:19092:${dir_id_1},2@localhost:19093:${dir_id_2},3@localhost:19094:${dir_id_3}"
@@ -749,9 +761,11 @@ EOF
 
     # Test 5: Describe topics and check ISR
     log_info "Test 5: Verifying topic replication..."
-    local topic_desc=$("$kafka_dir/bin/kafka-topics.sh" --describe --topic replicated-test --bootstrap-server "$bootstrap" 2>&1)
+    local topic_desc
+    topic_desc=$("$kafka_dir/bin/kafka-topics.sh" --describe --topic replicated-test --bootstrap-server "$bootstrap" 2>&1)
     if echo "$topic_desc" | grep -q "Isr:"; then
-        local isr_count=$(echo "$topic_desc" | grep -oE "Isr:[[:space:]]*[0-9,]+" | head -1 | sed 's/Isr:[[:space:]]*//' | tr ',' '\n' | wc -l || true)
+        local isr_count
+        isr_count=$(echo "$topic_desc" | grep -oE "Isr:[[:space:]]*[0-9,]+" | head -1 | sed 's/Isr:[[:space:]]*//' | tr ',' '\n' | wc -l || true)
         if [[ $isr_count -ge 3 ]]; then
             log_success "All replicas in sync (ISR count: $isr_count)"
             record_result "PASS" "Complex: ISR verification"
@@ -950,7 +964,8 @@ test_license_compliance() {
 
         # Check for unexpected binary files in source (exclude build dirs and gradle wrapper)
         log_info "Checking for unexpected binary files in source..."
-        local binary_files=$(find "$src_dir" \( -type d -name "build" -o -path "*/gradle/wrapper" \) -prune -o -type f \( -name "*.jar" -o -name "*.class" -o -name "*.so" -o -name "*.dll" -o -name "*.dylib" \) -print 2>/dev/null | head -5)
+        local binary_files
+        binary_files=$(find "$src_dir" \( -type d -name "build" -o -path "*/gradle/wrapper" \) -prune -o -type f \( -name "*.jar" -o -name "*.class" -o -name "*.so" -o -name "*.dll" -o -name "*.dylib" \) -print 2>/dev/null | head -5)
         if [[ -z "$binary_files" ]]; then
             log_success "No unexpected binary files in source distribution"
             record_result "PASS" "License: No binaries in source"
@@ -995,7 +1010,8 @@ test_version_consistency() {
     local all_match=true
 
     if [[ -d "$src_dir" && -f "$src_dir/gradle.properties" ]]; then
-        local gradle_version=$(grep "^version=" "$src_dir/gradle.properties" | cut -d'=' -f2 | tr -d '[:space:]')
+        local gradle_version
+        gradle_version=$(grep "^version=" "$src_dir/gradle.properties" | cut -d'=' -f2 | tr -d '[:space:]')
         if [[ -n "$gradle_version" ]]; then
             versions_found+=("gradle.properties: $gradle_version")
             if [[ "$gradle_version" != "$VERSION" ]]; then
@@ -1008,9 +1024,11 @@ test_version_consistency() {
     fi
 
     if [[ -d "$bin_dir/libs" ]]; then
-        local clients_jar=$(ls "$bin_dir/libs/kafka-clients-"*.jar 2>/dev/null | head -1)
+        local clients_jar
+        clients_jar=$(ls "$bin_dir/libs/kafka-clients-"*.jar 2>/dev/null | head -1)
         if [[ -n "$clients_jar" && -f "$clients_jar" ]]; then
-            local manifest_version=$(unzip -p "$clients_jar" META-INF/MANIFEST.MF 2>/dev/null | grep "Implementation-Version:" | cut -d':' -f2 | tr -d '[:space:]\r')
+            local manifest_version
+            manifest_version=$(unzip -p "$clients_jar" META-INF/MANIFEST.MF 2>/dev/null | grep "Implementation-Version:" | cut -d':' -f2 | tr -d '[:space:]\r')
             if [[ -n "$manifest_version" ]]; then
                 versions_found+=("kafka-clients JAR manifest: $manifest_version")
                 if [[ "$manifest_version" != "$VERSION" ]]; then
@@ -1024,7 +1042,8 @@ test_version_consistency() {
     fi
 
     if [[ -d "$bin_dir" && -x "$bin_dir/bin/kafka-broker-api-versions.sh" ]]; then
-        local cli_version=$("$bin_dir/bin/kafka-broker-api-versions.sh" --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+        local cli_version
+        cli_version=$("$bin_dir/bin/kafka-broker-api-versions.sh" --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         if [[ -n "$cli_version" ]]; then
             versions_found+=("CLI --version: $cli_version")
             if [[ "$cli_version" != "$VERSION" ]]; then
@@ -1107,7 +1126,7 @@ EOF
     log_info "Starting Kafka Connect standalone..."
     "$kafka_dir/bin/connect-standalone.sh" "$connect_config" "$source_config" > "${WORK_DIR}/kafka-connect-standalone.log" 2>&1 &
     local connect_pid=$!
-    MANAGED_PIDS+=($connect_pid)
+    MANAGED_PIDS+=("$connect_pid")
     log_info "Connect logs: ${WORK_DIR}/kafka-connect-standalone.log"
 
     log_info "Waiting for Connect REST API (max 60s)..."
@@ -1133,7 +1152,8 @@ EOF
     record_result "PASS" "Connect: REST API startup"
 
     log_info "Checking connector plugins..."
-    local plugins=$(curl -s http://localhost:8083/connector-plugins 2>/dev/null)
+    local plugins
+    plugins=$(curl -s http://localhost:8083/connector-plugins 2>/dev/null)
     if echo "$plugins" | grep -q -E "(FileStreamSource|file\.FileStreamSourceConnector)"; then
         log_success "FileStreamSource connector plugin found"
         record_result "PASS" "Connect: FileStreamSource plugin"
@@ -1155,7 +1175,8 @@ EOF
 
     log_info "Checking connector status..."
     sleep 3
-    local connectors=$(curl -s http://localhost:8083/connectors 2>/dev/null)
+    local connectors
+    connectors=$(curl -s http://localhost:8083/connectors 2>/dev/null)
     if echo "$connectors" | grep -q "local-file-source"; then
         log_success "File source connector is running"
         record_result "PASS" "Connect: connector running"
@@ -1167,8 +1188,10 @@ EOF
     log_info "Verifying data flow through Connect..."
     sleep 5
 
-    local consumed=$(timeout 15 "$kafka_dir/bin/kafka-console-consumer.sh" --topic connect-test-topic --from-beginning --max-messages 5 --bootstrap-server localhost:9092 2>/dev/null || true)
-    local msg_count=$(echo "$consumed" | grep -c "line" || true)
+    local consumed
+    consumed=$(timeout 15 "$kafka_dir/bin/kafka-console-consumer.sh" --topic connect-test-topic --from-beginning --max-messages 5 --bootstrap-server localhost:9092 2>/dev/null || true)
+    local msg_count
+    msg_count=$(echo "$consumed" | grep -c "line" || true)
 
     if [[ $msg_count -ge 3 ]]; then
         log_success "Connect data flow verified: $msg_count messages consumed from topic"
@@ -1455,7 +1478,8 @@ remote.log.manager.task.interval.ms=5000
     while [[ $tier_wait -lt 120 ]]; do
         sleep 10
         tier_wait=$((tier_wait + 10))
-        local object_count=$(docker run --rm --network host \
+        local object_count
+        object_count=$(docker run --rm --network host \
             -e "MC_HOST_local=http://${MINIO_ACCESS_KEY}:${MINIO_SECRET_KEY}@localhost:${MINIO_PORT}" \
             minio/mc ls --recursive "local/${TIERED_STORAGE_BUCKET}/" 2>/dev/null | wc -l || echo "0")
         if [[ "$object_count" -gt 0 ]]; then
@@ -1475,7 +1499,8 @@ remote.log.manager.task.interval.ms=5000
 
     # Step 8: Consume data back to verify readability
     log_info "Consuming data from tiered storage topic..."
-    local consumed_count=$(timeout 60 "$kafka_dir/bin/kafka-console-consumer.sh" \
+    local consumed_count
+    consumed_count=$(timeout 60 "$kafka_dir/bin/kafka-console-consumer.sh" \
         --topic tiered-test --from-beginning --max-messages 5000 \
         --bootstrap-server localhost:9092 2>/dev/null | wc -l || echo "0")
 
@@ -1492,7 +1517,8 @@ remote.log.manager.task.interval.ms=5000
         log_info "Waiting for local retention to expire (15s)..."
         sleep 15
         log_info "Consuming data that should now be served from remote storage..."
-        local remote_consumed=$(timeout 30 "$kafka_dir/bin/kafka-console-consumer.sh" \
+        local remote_consumed
+        remote_consumed=$(timeout 30 "$kafka_dir/bin/kafka-console-consumer.sh" \
             --topic tiered-test --from-beginning --max-messages 100 \
             --bootstrap-server localhost:9092 2>/dev/null | wc -l || echo "0")
         if [[ "$remote_consumed" -ge 80 ]]; then
