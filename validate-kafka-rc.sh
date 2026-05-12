@@ -762,10 +762,10 @@ EOF
     # Test 5: Describe topics and check ISR
     log_info "Test 5: Verifying topic replication..."
     local topic_desc
-    topic_desc=$("$kafka_dir/bin/kafka-topics.sh" --describe --topic replicated-test --bootstrap-server "$bootstrap" 2>&1)
+    topic_desc=$("$kafka_dir/bin/kafka-topics.sh" --describe --topic replicated-test --bootstrap-server "$bootstrap" 2>&1) || true
     if echo "$topic_desc" | grep -q "Isr:"; then
         local isr_count
-        isr_count=$(echo "$topic_desc" | grep -oE "Isr:[[:space:]]*[0-9,]+" | head -1 | sed 's/Isr:[[:space:]]*//' | tr ',' '\n' | wc -l || true)
+        isr_count=$(echo "$topic_desc" | grep -oE "Isr:[[:space:]]*[0-9,]+" | head -1 | sed 's/Isr:[[:space:]]*//' | tr ',' '\n' | wc -l) || true
         if [[ $isr_count -ge 3 ]]; then
             log_success "All replicas in sync (ISR count: $isr_count)"
             record_result "PASS" "Complex: ISR verification"
@@ -942,8 +942,8 @@ test_license_compliance() {
         return 0
     fi
 
-    local src_dir="kafka-${VERSION}-src"
-    local bin_dir="kafka_2.13-${VERSION}"
+    local src_dir="${WORK_DIR}/kafka-${VERSION}-src"
+    local bin_dir="${WORK_DIR}/kafka_2.13-${VERSION}"
 
     if [[ -d "$src_dir" ]]; then
         if [[ -f "$src_dir/LICENSE" ]]; then
@@ -965,7 +965,7 @@ test_license_compliance() {
         # Check for unexpected binary files in source (exclude build dirs and gradle wrapper)
         log_info "Checking for unexpected binary files in source..."
         local binary_files
-        binary_files=$(find "$src_dir" \( -type d -name "build" -o -path "*/gradle/wrapper" \) -prune -o -type f \( -name "*.jar" -o -name "*.class" -o -name "*.so" -o -name "*.dll" -o -name "*.dylib" \) -print 2>/dev/null | head -5)
+        binary_files=$(find "$src_dir" \( -type d -name "build" -o -path "*/gradle/wrapper" \) -prune -o -type f \( -name "*.jar" -o -name "*.class" -o -name "*.so" -o -name "*.dll" -o -name "*.dylib" \) -print 2>/dev/null | head -5) || true
         if [[ -z "$binary_files" ]]; then
             log_success "No unexpected binary files in source distribution"
             record_result "PASS" "License: No binaries in source"
@@ -1004,14 +1004,14 @@ test_license_compliance() {
 test_version_consistency() {
     log_section "Testing Version Consistency"
 
-    local src_dir="kafka-${VERSION}-src"
-    local bin_dir="kafka_2.13-${VERSION}"
+    local src_dir="${WORK_DIR}/kafka-${VERSION}-src"
+    local bin_dir="${WORK_DIR}/kafka_2.13-${VERSION}"
     local versions_found=()
     local all_match=true
 
     if [[ -d "$src_dir" && -f "$src_dir/gradle.properties" ]]; then
         local gradle_version
-        gradle_version=$(grep "^version=" "$src_dir/gradle.properties" | cut -d'=' -f2 | tr -d '[:space:]')
+        gradle_version=$(grep "^version=" "$src_dir/gradle.properties" | cut -d'=' -f2 | tr -d '[:space:]') || true
         if [[ -n "$gradle_version" ]]; then
             versions_found+=("gradle.properties: $gradle_version")
             if [[ "$gradle_version" != "$VERSION" ]]; then
@@ -1028,7 +1028,7 @@ test_version_consistency() {
         clients_jar=$(ls "$bin_dir/libs/kafka-clients-"*.jar 2>/dev/null | head -1)
         if [[ -n "$clients_jar" && -f "$clients_jar" ]]; then
             local manifest_version
-            manifest_version=$(unzip -p "$clients_jar" META-INF/MANIFEST.MF 2>/dev/null | grep "Implementation-Version:" | cut -d':' -f2 | tr -d '[:space:]\r')
+            manifest_version=$(unzip -p "$clients_jar" META-INF/MANIFEST.MF 2>/dev/null | grep "Implementation-Version:" | cut -d':' -f2 | tr -d '[:space:]\r') || true
             if [[ -n "$manifest_version" ]]; then
                 versions_found+=("kafka-clients JAR manifest: $manifest_version")
                 if [[ "$manifest_version" != "$VERSION" ]]; then
@@ -1043,7 +1043,7 @@ test_version_consistency() {
 
     if [[ -d "$bin_dir" && -x "$bin_dir/bin/kafka-broker-api-versions.sh" ]]; then
         local cli_version
-        cli_version=$("$bin_dir/bin/kafka-broker-api-versions.sh" --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+        cli_version=$("$bin_dir/bin/kafka-broker-api-versions.sh" --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1) || true
         if [[ -n "$cli_version" ]]; then
             versions_found+=("CLI --version: $cli_version")
             if [[ "$cli_version" != "$VERSION" ]]; then
@@ -1191,7 +1191,7 @@ EOF
     local consumed
     consumed=$(timeout 15 "$kafka_dir/bin/kafka-console-consumer.sh" --topic connect-test-topic --from-beginning --max-messages 5 --bootstrap-server localhost:9092 2>/dev/null || true)
     local msg_count
-    msg_count=$(echo "$consumed" | grep -c "line" || true)
+    msg_count=$(echo "$consumed" | grep -c "line") || true
 
     if [[ $msg_count -ge 3 ]]; then
         log_success "Connect data flow verified: $msg_count messages consumed from topic"
@@ -1481,7 +1481,7 @@ remote.log.manager.task.interval.ms=5000
         local object_count
         object_count=$(docker run --rm --network host \
             -e "MC_HOST_local=http://${MINIO_ACCESS_KEY}:${MINIO_SECRET_KEY}@localhost:${MINIO_PORT}" \
-            minio/mc ls --recursive "local/${TIERED_STORAGE_BUCKET}/" 2>/dev/null | wc -l || echo "0")
+            minio/mc ls --recursive "local/${TIERED_STORAGE_BUCKET}/" 2>/dev/null | wc -l) || object_count=0
         if [[ "$object_count" -gt 0 ]]; then
             objects_found=true
             log_success "Found $object_count objects in S3 bucket after ${tier_wait}s"
@@ -1502,7 +1502,7 @@ remote.log.manager.task.interval.ms=5000
     local consumed_count
     consumed_count=$(timeout 60 "$kafka_dir/bin/kafka-console-consumer.sh" \
         --topic tiered-test --from-beginning --max-messages 5000 \
-        --bootstrap-server localhost:9092 2>/dev/null | wc -l || echo "0")
+        --bootstrap-server localhost:9092 2>/dev/null | wc -l) || consumed_count=0
 
     if [[ "$consumed_count" -ge 4000 ]]; then
         log_success "Consumed $consumed_count/5000 messages successfully"
@@ -1520,7 +1520,7 @@ remote.log.manager.task.interval.ms=5000
         local remote_consumed
         remote_consumed=$(timeout 30 "$kafka_dir/bin/kafka-console-consumer.sh" \
             --topic tiered-test --from-beginning --max-messages 100 \
-            --bootstrap-server localhost:9092 2>/dev/null | wc -l || echo "0")
+            --bootstrap-server localhost:9092 2>/dev/null | wc -l) || remote_consumed=0
         if [[ "$remote_consumed" -ge 80 ]]; then
             log_success "Consumed $remote_consumed messages from remote storage"
             record_result "PASS" "Tiered Storage: consume from remote after local deletion"
