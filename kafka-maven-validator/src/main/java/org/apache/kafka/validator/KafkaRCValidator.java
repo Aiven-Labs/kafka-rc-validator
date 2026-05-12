@@ -125,18 +125,28 @@ public class KafkaRCValidator {
     }
 
     public void runAllTests() throws Exception {
+        Runnable[] tests = {
+            this::testAdminClientOperations,
+            this::testIdempotentProducer,
+            this::testTransactionalProducer,
+            this::testConsumerWithManualCommit,
+            this::testConsumerWithAutoCommit,
+            this::testConsumerGroupRebalancing,
+            this::testPartitionAssignment,
+            this::testCustomSerializers,
+            this::testKafkaStreamsTopology,
+            this::testMetricsAccess,
+            this::testTopicDeletion,
+        };
+
         try {
-            testAdminClientOperations();
-            testIdempotentProducer();
-            testTransactionalProducer();
-            testConsumerWithManualCommit();
-            testConsumerWithAutoCommit();
-            testConsumerGroupRebalancing();
-            testPartitionAssignment();
-            testCustomSerializers();
-            testKafkaStreamsTopology();
-            testMetricsAccess();
-            testTopicDeletion();
+            for (Runnable test : tests) {
+                try {
+                    test.run();
+                } catch (RuntimeException e) {
+                    recordResult(e.getMessage(), Status.FAIL, e.getCause() != null ? e.getCause().getMessage() : "");
+                }
+            }
         } finally {
             cleanupTopics();
         }
@@ -590,8 +600,9 @@ public class KafkaRCValidator {
                 return;
             }
 
-            // Wait for auto-commit to trigger (interval is 1000ms)
-            Thread.sleep(2000);
+            // Auto-commit fires during poll() after the interval elapses
+            Thread.sleep(1500);
+            consumer.poll(Duration.ofMillis(500));
 
             // Verify offsets while consumer is still open
             Properties adminProps = new Properties();
