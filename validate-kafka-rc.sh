@@ -202,14 +202,11 @@ setup_workdir() {
     # Clean up leftover Docker containers from previous runs
     docker rm -f "$(docker ps -aq --filter name=kafka-rc-)" &>/dev/null || true
 
-    # Clean up logs and data from previous runs
+    # Clean up logs and ephemeral data from previous runs (preserves source/binary dirs and archives)
     rm -f "$WORK_DIR"/*.log 2>/dev/null || true
     rm -rf "$WORK_DIR"/kafka-logs-* "$WORK_DIR"/kafka-cluster-* 2>/dev/null || true
     rm -rf "$WORK_DIR"/tiered-storage-plugin 2>/dev/null || true
     rm -f "$WORK_DIR"/connect-offsets-* "$WORK_DIR"/connect-test-input-* 2>/dev/null || true
-
-    # Clean up downloaded archives (will re-download)
-    rm -rf kafka-*.tgz* kafka-*.zip* KEYS 2>/dev/null || true
 }
 
 import_keys() {
@@ -250,37 +247,48 @@ download_artifacts() {
     )
 
     for artifact in "${artifacts[@]}"; do
-        log_info "Downloading $artifact..."
-
-        if curl -sSf -O "${BASE_URL}/${artifact}"; then
-            log_success "Downloaded $artifact"
+        if [[ -f "$artifact" ]]; then
+            log_info "Already have $artifact, skipping download"
         else
-            log_error "Failed to download $artifact"
-            record_result "FAIL" "Download $artifact"
-            continue
+            log_info "Downloading $artifact..."
+            if curl -sSf -O "${BASE_URL}/${artifact}"; then
+                log_success "Downloaded $artifact"
+            else
+                log_error "Failed to download $artifact"
+                record_result "FAIL" "Download $artifact"
+                continue
+            fi
         fi
 
-        if curl -sSf -O "${BASE_URL}/${artifact}.asc"; then
+        if [[ -f "${artifact}.asc" ]]; then
+            log_info "Already have ${artifact}.asc"
+        elif curl -sSf -O "${BASE_URL}/${artifact}.asc"; then
             log_success "Downloaded ${artifact}.asc"
         else
             log_error "Failed to download ${artifact}.asc"
             record_result "FAIL" "Download ${artifact}.asc"
         fi
 
-        if curl -sSf -O "${BASE_URL}/${artifact}.sha512"; then
+        if [[ -f "${artifact}.sha512" ]]; then
+            log_info "Already have ${artifact}.sha512"
+        elif curl -sSf -O "${BASE_URL}/${artifact}.sha512"; then
             log_success "Downloaded ${artifact}.sha512"
         else
             log_error "Failed to download ${artifact}.sha512"
             record_result "FAIL" "Download ${artifact}.sha512"
         fi
 
-        if curl -sS -f -O "${BASE_URL}/${artifact}.sha1" 2>/dev/null; then
+        if [[ -f "${artifact}.sha1" ]]; then
+            log_info "Already have ${artifact}.sha1"
+        elif curl -sS -f -O "${BASE_URL}/${artifact}.sha1" 2>/dev/null; then
             log_success "Downloaded ${artifact}.sha1"
         else
             log_info "No SHA1 file available for ${artifact}"
         fi
 
-        if curl -sS -f -O "${BASE_URL}/${artifact}.md5" 2>/dev/null; then
+        if [[ -f "${artifact}.md5" ]]; then
+            log_info "Already have ${artifact}.md5"
+        elif curl -sS -f -O "${BASE_URL}/${artifact}.md5" 2>/dev/null; then
             log_success "Downloaded ${artifact}.md5"
         else
             log_info "No MD5 file available for ${artifact}"
@@ -433,10 +441,13 @@ build_from_source() {
         return 1
     fi
 
-    log_info "Extracting source archive..."
-    rm -rf "${WORK_DIR}/kafka-${VERSION}-src" 2>/dev/null || true
-    tar -xzf "$src_archive" -C "$WORK_DIR"
     local src_dir="${WORK_DIR}/kafka-${VERSION}-src"
+    if [[ -d "$src_dir" ]]; then
+        log_info "Source directory already exists, reusing it"
+    else
+        log_info "Extracting source archive..."
+        tar -xzf "$src_archive" -C "$WORK_DIR"
+    fi
 
     log_info "Building Kafka (this may take a while)..."
     if (cd "$src_dir" && ./gradlew build -x test --no-daemon 2>&1) | tee "${WORK_DIR}/build.log"; then
@@ -473,10 +484,13 @@ test_binary_distribution() {
         return 1
     fi
 
-    log_info "Extracting binary archive..."
-    rm -rf "${WORK_DIR}/kafka_2.13-${VERSION}" 2>/dev/null || true
-    tar -xzf "$binary_archive" -C "$WORK_DIR"
     local bin_dir="${WORK_DIR}/kafka_2.13-${VERSION}"
+    if [[ -d "$bin_dir" ]]; then
+        log_info "Binary directory already exists, reusing it"
+    else
+        log_info "Extracting binary archive..."
+        tar -xzf "$binary_archive" -C "$WORK_DIR"
+    fi
 
     local scripts=("bin/kafka-server-start.sh" "bin/kafka-topics.sh" "bin/kafka-console-producer.sh" "bin/kafka-console-consumer.sh")
     local all_scripts_found=true
